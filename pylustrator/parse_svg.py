@@ -213,6 +213,8 @@ def apply_style(style: dict, patch: mpatches.Patch) -> dict:
                 pass
             elif key == "display":
                 pass
+            elif key == "text-anchor":
+                pass
             else:
                 print("ERROR: unknown style key", key, file=sys.stderr)
         except ValueError:
@@ -324,11 +326,23 @@ def plt_draw_text(node: minidom.Element, trans: mtransforms.Transform, style: di
 
     style = get_inline_style(node, get_css_style(node, ids["css"], style))
 
+    dx = node.getAttribute("dx") or "0"
+    dy = node.getAttribute("dy") or "0"
+
     text_content = ""
     patch_list = []
     for child in node.childNodes:
-        text_content += child.firstChild.nodeValue
-        if 1:
+        if not isinstance(child, minidom.Element):
+            partial_content = child.data
+            pos_child = pos.copy()
+
+            pos_child[0] += svgUnitToMpl(dx)
+            pos_child[1] -= svgUnitToMpl(dy)
+            style_child = style
+            part_id = ""
+        else:
+            part_id = node.getAttribute("id")
+            partial_content = child.firstChild.nodeValue
             style_child = get_inline_style(child, get_css_style(child, ids["css"], style))
             pos_child = pos.copy()
             if child.getAttribute("x") != "":
@@ -337,22 +351,19 @@ def plt_draw_text(node: minidom.Element, trans: mtransforms.Transform, style: di
                 pos_child[0] += svgUnitToMpl(child.getAttribute("dx"))
             if child.getAttribute("dy") != "":
                 pos_child[1] -= svgUnitToMpl(child.getAttribute("dy"))
-            path1 = TextPath(pos_child,
-                             child.firstChild.nodeValue,
-                             prop=font_properties_from_style(style_child))
-            patch = mpatches.PathPatch(path1, transform=trans)
 
-            apply_style(style_child, patch)
-            if not no_draw and not styleNoDisplay(style_child):
-                plt.gca().add_patch(patch)
-            if child.getAttribute("id") != "":
-                ids[child.getAttribute("id")] = patch
-            patch_list.append(patch)
-        else:
-            text = plt.text(float(child.getAttribute("x")), float(child.getAttribute("y")),
-                     child.firstChild.nodeValue,
-                     transform=trans)
-            apply_style(style, text)
+        text_content += partial_content
+        path1 = TextPath(pos_child,
+            partial_content,
+            prop=font_properties_from_style(style_child))
+        patch = mpatches.PathPatch(path1, transform=trans)
+
+        apply_style(style_child, patch)
+        if not no_draw and not styleNoDisplay(style_child):
+            plt.gca().add_patch(patch)
+        if part_id != "":
+            ids[part_id] = patch
+        patch_list.append(patch)
 
     if node.getAttribute("id") != "":
         ids[node.getAttribute("id")] = patch_list
